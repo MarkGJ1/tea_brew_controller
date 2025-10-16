@@ -1,4 +1,4 @@
-# tea_brew_c
+# tea_brew_controller
 This repo contains the tea brew controller project written in VHDL.<br>
 Part of Computer-aided Circuit Design 2.
 
