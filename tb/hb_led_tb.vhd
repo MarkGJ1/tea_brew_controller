@@ -1,3 +1,8 @@
+-- File name: hb_led_tb.vhd
+-- Description: heartbeat LED module testbench.
+-- Author: Marko Gjorgjievski
+-- Date created: 20.10.2025
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
