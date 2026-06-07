@@ -1,271 +1,186 @@
+-- File name: uart_rx.vhd
+-- Description: UART RX Module for receiving data from UART Transmitter. Fixed 9600 Baud on 27MHz. 8N2 UART.
+-- Author: Marko Gjorgjievski
+-- Date created: 15.03.2025
+-- Date modified: 07.06.2026
+-- Recent changes: Greatly simplified and hard-coded uart rate (9600) for tang base clock.
+
 library IEEE;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-entity uartV2_rx_e is
+entity uart_rx_e is
 
-  generic(baud_g  : integer := 1250);
-  port(
-    cp_i      : in  std_logic;
-    rb_i      : in  std_logic;
-    rxd_i     : in  std_logic;
-    rx_dv_o   : out  std_logic;
-    rx_byte_o : out  std_logic_vector(7 downto 0));
+    generic(
+        baud_rate_g : integer := 2813 -- 27MHz / 9600 = 2812,5 ~ 2813.
+    );
+    port (
+        cp_i      : in  std_logic;
+        rb_i      : in  std_logic;
+        rxd_i     : in  std_logic;
+        rx_dv_o   : out std_logic;
+        rx_byte_o : out std_logic_vector(7 downto 0)
+    );
 
 end entity;
 
-architecture uartV2_rx_a of uartV2_rx_e is
+architecture uart_rx_a of uart_rx_e is
 
-  type rx_fsm_t is (idle_st, bitST_st, bit1_st, bit2_st, bit3_st, bit4_st,
-  bit5_st, bit6_st, bit7_st, bit8_st, bitD_st, bitD2_st, clean_st,
-  chk_st, baudrst_st);
+    constant baud_width_c  : integer := 12; -- ceil(log2(2813))
+    constant sample_mid_c  : integer := baud_rate_g / 2;
 
-  signal rxd_s, rxd2_s, rx_st_s: std_logic;
-  signal rx_fsm_s, rx_fsmnx_s  : rx_fsm_t;
-  signal baud_s : integer range 0 to baud_g-1;
-  signal nx_s    : std_logic;
-  signal rx_dv_s : std_logic;
-  signal read_s  : std_logic;
-  signal rx_byte_s : std_logic_vector(7 downto 0);
-    
+    type uart_fsm_t is (IDLE, START, DATA, STOP_B, DONE);
+    signal fsm_r, fsm_next_w : uart_fsm_t;
+
+    signal baud_sample_r : unsigned(baud_width_c-1 downto 0);
+    signal baud_ena_w    : std_logic;
+    signal baud_tick_r   : std_logic;
+
+    signal rx_dv_r       : std_logic;
+    signal rxd_ff1_r     : std_logic;
+    signal rxd_ff2_r     : std_logic;
+    signal rx_byte_r     : std_logic_vector(7 downto 0);
+
+    signal rx_bit_idx_r  : integer range 0 to 7;
+    signal rx_stop_idx_r : integer range 0 to 1;
+
 begin
 
-rx_byte_o <= rx_byte_s;
-rx_dv_o   <= rx_dv_s;
+    p_baud_gen : process(rb_i, cp_i)
+    begin
+        if rb_i = '0' then
+            baud_sample_r <= (others => '0');
+            baud_tick_r   <= '0';
+        elsif rising_edge(cp_i) then
+            if baud_ena_w = '1' then
+                case fsm_r is
+                    when START =>
+                        if baud_sample_r < sample_mid_c then
+                            baud_tick_r   <= '0';
+                            baud_sample_r <= baud_sample_r + 1;
+                        else
+                            baud_tick_r   <= '1';
+                            baud_sample_r <= (others => '0');
+                        end if;
+                    when DATA | STOP_B =>
+                        if baud_sample_r < baud_rate_g then
+                            baud_tick_r   <= '0';
+                            baud_sample_r <= baud_sample_r + 1;
+                        else
+                            baud_tick_r   <= '1';
+                            baud_sample_r <= (others => '0');
+                        end if;
+                    when others =>
+                        baud_sample_r <= (others => '0');
+                        baud_tick_r   <= '0';
+                end case;
+            else
+                baud_tick_r   <= '0';
+                baud_sample_r <= (others => '0');
+            end if;
+        end if;
+    end process;
 
+    p_rx_sample : process(rb_i, cp_i)
+    begin
+        if rb_i = '0' then
+            rxd_ff1_r <= '1';
+            rxd_ff2_r <= '1';
+        elsif rising_edge(cp_i) then
+            rxd_ff1_r <= rxd_i;
+            rxd_ff2_r <= rxd_ff1_r;
+        end if;
+    end process;
 
-rx_takt_p: process(cp_i, rb_i, rx_st_s)
-begin
+    p_bits_sample : process(rb_i, cp_i)
+    begin
+        if rb_i = '0' then
+            rx_bit_idx_r  <= 0;
+            rx_stop_idx_r <= 0;
+            rx_byte_r     <= (others => '0');
+        elsif rising_edge(cp_i) then
+            if baud_tick_r = '1' then
+                case fsm_r is
+                    when DATA =>
+                        rx_byte_r(rx_bit_idx_r) <= rxd_ff2_r;
+                        if rx_bit_idx_r < 7 then
+                            rx_bit_idx_r <= rx_bit_idx_r + 1;
+                        else
+                            rx_bit_idx_r <= 0;
+                        end if;
+                    when STOP_B =>
+                        if rx_stop_idx_r < 1 then
+                            rx_stop_idx_r <= rx_stop_idx_r + 1;
+                        else
+                            rx_stop_idx_r <= 0;
+                        end if;
+                    when others =>
+                        rx_bit_idx_r  <= 0;
+                        rx_stop_idx_r <= 0;
+                end case;
+            end if;
+        end if;
+    end process;
 
-  if rb_i <= '0' then
-    rx_fsm_s <= idle_st;
-  elsif rising_edge(cp_i) then
-    rx_fsm_s <= rx_fsmnx_s;
-    
-    rxd_s  <= rxd_i;
-    rxd2_s <= rxd_s;
-   
-    if rx_st_s = '1' then
-      
-      if baud_s = (baud_g/2)-1 then
-        read_s <= '1';
-      else
-        read_s <= '0';
-      end if;
-      
-      if baud_s < baud_g-1 then
-        baud_s <= baud_s + 1;
-        nx_s   <= '0';
-      else
-        baud_s <= 0;
-        nx_s   <= '1';
-      end if;
-    else
-      read_s <= '0';
-      baud_s <= 0;
-      nx_s   <= '0';
-    end if;
-    
-  end if;
-  
-end process;
+    p_fsm_clocked : process(rb_i, cp_i)
+    begin
+        if rb_i = '0' then
+            fsm_r <= IDLE;
+        elsif rising_edge(cp_i) then
+            fsm_r <= fsm_next_w;
+        end if;
+    end process;
 
-rx_fsmf_p: process(rx_fsm_s, nx_s, rxd2_s, read_s)
-begin
-  rx_fsmnx_s <= rx_fsm_s;
-  
-    case rx_fsm_s is
-      
-      when idle_st =>
-        if rxd2_s = '0' then
-          rx_fsmnx_s <= chk_st;
-        else
-          rx_fsmnx_s <= idle_st;
-        end if;
-      
-      when chk_st   =>
-        if read_s = '1' then
-          if rxd2_s = '0' then
-            rx_fsmnx_s <= baudrst_st;
-          else
-            rx_fsmnx_s <= idle_st;
-          end if;
-        else
-          rx_fsmnx_s <= chk_st;
-        end if;
-      
-      when baudrst_st =>
-        rx_fsmnx_s <= bitST_st;
-        
-      when bitST_st =>
-        if nx_s = '1' then
-          rx_fsmnx_s <= bit1_st;
-        else
-          rx_fsmnx_s <= bitST_st;
-        end if;
-      
-      when bit1_st =>
-        if nx_s = '1' then
-          rx_fsmnx_s <= bit2_st;
-        else
-          rx_fsmnx_s <= bit1_st;
-        end if;
-      when bit2_st =>
-        if nx_s = '1' then
-          rx_fsmnx_s <= bit3_st;
-        else
-          rx_fsmnx_s <= bit2_st;
-        end if;
-      when bit3_st =>
-        if nx_s = '1' then
-          rx_fsmnx_s <= bit4_st;
-        else
-          rx_fsmnx_s <= bit3_st;
-        end if;
-      when bit4_st =>
-        if nx_s = '1' then
-          rx_fsmnx_s <= bit5_st;
-        else
-          rx_fsmnx_s <= bit4_st;
-        end if;
-      when bit5_st =>
-        if nx_s = '1' then
-          rx_fsmnx_s <= bit6_st;
-        else
-          rx_fsmnx_s <= bit5_st;
-        end if;
-      when bit6_st =>
-        if nx_s = '1' then
-          rx_fsmnx_s <= bit7_st;
-        else
-          rx_fsmnx_s <= bit6_st;
-        end if;
-      when bit7_st =>
-        if nx_s = '1' then
-          rx_fsmnx_s <= bit8_st;
-        else
-          rx_fsmnx_s <= bit7_st;
-        end if;
-      when bit8_st =>
-        if nx_s = '1' then
-          rx_fsmnx_s <= bitD_st;
-        else
-          rx_fsmnx_s <= bit8_st;
-        end if;
-      
-      when bitD_st =>
-        
-        if rxd2_s = '1' then
-          rx_fsmnx_s <= bitD_st;
-        else
-          rx_fsmnx_s <= idle_st;
-        end if;
-        
-        if nx_s = '1' then
-          rx_fsmnx_s <= bitD2_st;
-        else
-          rx_fsmnx_s <= bitD_st;
-        end if;
-        
-      when bitD2_st =>
-        if rxd2_s = '1' then
-          rx_fsmnx_s <= clean_st;
-        else
-          rx_fsmnx_s <= idle_st;
-        end if;
-      
-      when clean_st =>
-        rx_fsmnx_s <= idle_st;
-      
-      when others =>
-        rx_fsmnx_s <= idle_st;
-      
-    end case;
-end process;
-        
-rx_sample_p:process(rx_fsm_s)
-begin
-  
-  case rx_fsm_s is
-    
-    when idle_st =>
-      rx_byte_s <= (others => '0');
-      rx_st_s   <= '0';
-      rx_dv_s   <= '0';
-        
-    when chk_st =>
-      rx_byte_s <= (others => '0');
-      rx_st_s   <= '1';
-      rx_dv_s   <= '0';
-      
-    when baudrst_st =>
-      rx_byte_s <= (others => '0');
-      rx_st_s   <= '0';
-      rx_dv_s   <= '0';
-    
-    when bitST_st =>
-      rx_byte_s <= (others => '0');
-      rx_st_s   <= '1';
-      rx_dv_s   <= '0';
-    
-    when bit1_st =>
-      rx_byte_s(0) <= rxd2_s;
-      rx_st_s   <= '1';
-      rx_dv_s   <= '0';  
+    p_fsm_transition : process(fsm_r, baud_tick_r, rxd_ff2_r, rx_bit_idx_r, rx_stop_idx_r)
+    begin
+        fsm_next_w <= fsm_r;
+        case fsm_r is
+            when IDLE =>
+                if rxd_ff2_r = '0' then
+                    fsm_next_w <= START;
+                end if;
+            when START =>
+                if baud_tick_r = '1' then
+                    if rxd_ff2_r = '0' then
+                        fsm_next_w <= DATA;
+                    else
+                        fsm_next_w <= IDLE;
+                    end if;
+                end if;
+            when DATA =>
+                if baud_tick_r = '1' and rx_bit_idx_r >= 7 then
+                    fsm_next_w <= STOP_B;
+                end if;
+            when STOP_B =>
+                if baud_tick_r = '1' then
+                    if rxd_ff2_r = '1' then
+                        if rx_stop_idx_r >= 1 then
+                            fsm_next_w <= DONE;
+                        end if;
+                    else
+                        fsm_next_w <= IDLE;
+                    end if;
+                end if;
+            when DONE =>
+                fsm_next_w <= IDLE;
+            when others =>
+                fsm_next_w <= IDLE;
+        end case;
+    end process;
 
-    when bit2_st =>
-      rx_byte_s(1) <= rxd2_s;
-      rx_st_s   <= '1';
-      rx_dv_s   <= '0'; 
-         
-    when bit3_st =>
-      rx_byte_s(2) <= rxd2_s;
-      rx_st_s   <= '1';
-      rx_dv_s   <= '0';  
+    p_fsm_output : process(fsm_r)
+    begin
+        baud_ena_w <= '0';
+        rx_dv_r    <= '0';
+        case fsm_r is
+            when IDLE  => null;
+            when START | DATA | STOP_B => baud_ena_w <= '1';
+            when DONE  => rx_dv_r <= '1';
+            when others => null;
+        end case;
+    end process;
 
-    when bit4_st =>
-      rx_byte_s(3) <= rxd2_s;  
-      rx_st_s   <= '1';
-      rx_dv_s   <= '0';
+    rx_dv_o   <= rx_dv_r;
+    rx_byte_o <= rx_byte_r;
 
-    when bit5_st =>
-      rx_byte_s(4) <= rxd2_s;  
-      rx_st_s   <= '1';
-      rx_dv_s   <= '0';
-
-    when bit6_st =>
-      rx_byte_s(5) <= rxd2_s;
-      rx_st_s   <= '1';
-      rx_dv_s   <= '0';  
-
-    when bit7_st =>
-      rx_byte_s(6) <= rxd2_s;
-      rx_st_s   <= '1';
-      rx_dv_s   <= '0';  
-
-    when bit8_st =>
-      rx_byte_s(7) <= rxd2_s;
-      rx_st_s   <= '1';  
-      rx_dv_s   <= '0';
-
-    when bitD_st =>
-      rx_st_s <= '1';
-      rx_dv_s <= '0';
-    
-    when bitD2_st =>
-      rx_st_s <= '1';
-      rx_dv_s <= '0';
-    
-    when clean_st =>
-      rx_st_s <= '0';
-      rx_dv_s <= '1';
-      
-    when others =>
-      rx_byte_s <= (others => '0');
-      rx_dv_s <= '0';
-      rx_st_s <= '0';
-    
-  end case;
-end process;
-
-end architecture;  
+end architecture;

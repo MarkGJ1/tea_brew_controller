@@ -1,8 +1,9 @@
--- File name: snd_tb.vhd
--- Description: testbench for the sound module.
+-- File name: uart_tx_tb.vhd
+-- Description: UART TX Testbench
 -- Author: Marko Gjorgjievski
 -- Date created: 22.10.2025
--- Date modified: 23.10.2025, Finished module.
+-- Date modified: 07.06.2026
+-- Recent changes: Better assertion test process.
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -15,7 +16,7 @@ architecture uart_tx_tb_a of uart_tx_tb is
 
     component uart_tx_e is
     generic(
-        baud_rate  : integer := 104 -- 27MHz / 9600 baud = 104.16 us
+        baud_rate_g  : integer := 104 -- 1MHz / 9600 = 104,16 ~ 104.
     );
     port (
         cp_i            : in std_logic;
@@ -60,9 +61,11 @@ begin
         rb_s <= '1';
 
         wait until rising_edge(cp_s);
-        tx_byte_s <= X"AB"; -- Byte to be transmitted.
+        tx_byte_s <= X"AA"; -- Byte to be transmitted.
         wait until rising_edge(cp_s);
         tx_dv_s   <= '1'; -- Byte valid, start transmit.
+        wait until rising_edge(cp_s);
+        tx_dv_s   <= '0';
 
         wait for 52 us; -- baud_rate / 2 to assert at middle of bit.
 
@@ -81,15 +84,10 @@ begin
             wait for 104 us;
         end loop;
 
-        
-        wait until rising_edge(cp_s);
-        tx_dv_s   <= '0';
-        wait until tx_done_s = '1';
-
         -- Second test transmission to check if UART blocks.
         ---------------------------------------------------------------
         wait for 200 us;
-        tx_byte_s <= X"FF";
+        tx_byte_s <= X"55";
         wait until rising_edge(cp_s);
         tx_dv_s   <= '1';
         wait until rising_edge(cp_s);
