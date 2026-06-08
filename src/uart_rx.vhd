@@ -36,7 +36,7 @@ architecture uart_rx_a of uart_rx_e is
     signal baud_ena_w    : std_logic;
     signal baud_tick_r   : std_logic;
 
-    signal rx_dv_r       : std_logic;
+    signal rx_dv_w       : std_logic;
     signal rxd_ff1_r     : std_logic;
     signal rxd_ff2_r     : std_logic;
     signal rx_byte_r     : std_logic_vector(7 downto 0);
@@ -171,16 +171,16 @@ begin
     p_fsm_output : process(fsm_r)
     begin
         baud_ena_w <= '0';
-        rx_dv_r    <= '0';
+        rx_dv_w    <= '0';
         case fsm_r is
             when IDLE  => null;
             when START | DATA | STOP_B => baud_ena_w <= '1';
-            when DONE  => rx_dv_r <= '1';
+            when DONE  => rx_dv_w <= '1';
             when others => null;
         end case;
     end process;
 
-    rx_dv_o   <= rx_dv_r;
+    rx_dv_o   <= rx_dv_w;
     rx_byte_o <= rx_byte_r;
 
 end architecture;
