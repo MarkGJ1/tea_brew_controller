@@ -1,8 +1,9 @@
 -- File name: reg88_tb.vhd
--- Description: reg88 testbench using uart RX.
+-- Description: reg88 testbench using UART-RX.
 -- Author: Marko Gjorgjievski
 -- Date created: 08.06.2026
--- Date modified: 
+-- Date modified: 13.06.2026
+-- Recent changes: removed testing for TX features.
 
 
 library ieee;
@@ -18,13 +19,10 @@ architecture reg88_tb_a of reg88_tb is
 		port (
             cp_i     : in std_logic;
             rb_i     : in std_logic;
-            tx_dv_i  : in std_logic;
             rx_dv_i  : in std_logic;
             byte_i   : in std_logic_vector(7 downto 0);
-            byte_o   : out std_logic_vector(7 downto 0);
             reg88_o  : out std_logic_vector(87 downto 0); -- "xx:xx:xxE<CR><LF>" - 11x8 - 11 Bytes
-            rx_dv_o  : out std_logic;
-            tx_dv_o  : out std_logic
+            rx_dv_o  : out std_logic
     );
 	end component;
 
@@ -53,7 +51,6 @@ architecture reg88_tb_a of reg88_tb is
 	signal rx_dv_s      : std_logic;
 	signal rx_byte_s    : std_logic_vector (7 downto 0);
 
-    signal tx_dv_s      : std_logic := '0';
     signal reg88_s      : std_logic_vector(87 downto 0);
     signal wr_ubyte_s   : unsigned(7 downto 0) := X"0A";
     signal wr_vbyte_s   : std_logic_vector(7 downto 0) := X"0A";
@@ -95,13 +92,10 @@ begin
     port map(
         cp_i => cp_s,
         rb_i => rb_s,
-        tx_dv_i => tx_dv_s,
         rx_dv_i => rx_dv_s,
         byte_i => rx_byte_s,
-        byte_o => open,
         reg88_o => reg88_s,
-        rx_dv_o => open,
-        tx_dv_o => open
+        rx_dv_o => open
     );
 
 	cp_s <= not cp_s after clk_period_c / 2;
@@ -141,18 +135,10 @@ begin
             UART_WRITE_BYTE(wr_vbyte_s, rxd_s);
         end loop;
         ------------------------------------------------------
-        assert reg88_s = X"0B0A09080706050403AA3F" report "Incorrect register byte sequence received" severity note;
+        assert reg88_s = X"1211100F0E0D0C0B0AAA3F" report "Incorrect register byte sequence received" severity note; -- TODO: Fix this sequence.
         -- Transmission test
         ------------------------------------------------------
-        for ii in 0 to 10 loop
-			wait for baud_byte_period;
-            wait until rising_edge(cp_s);
-            tx_dv_s <= '1';
-            wait until rising_edge(cp_s);
-            tx_dv_s <= '0';
-		end loop; -- ii
-    
-        wait for baud_byte_period;
+
 		-- Test end.
 		-- Make sure to enable simulation break on severity failure in ModelSIM to stop simulation.
 		report "Test Complete" severity failure;

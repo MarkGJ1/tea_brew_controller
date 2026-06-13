@@ -15,17 +15,17 @@ end entity;
 architecture uart_tx_tb_a of uart_tx_tb is
 
     component uart_tx_e is
-    generic(
-        baud_rate_g  : integer := 104 -- 1MHz / 9600 = 104,16 ~ 104.
-    );
-    port (
-        cp_i            : in std_logic;
-        rb_i            : in std_logic;
-        tx_dv_i         : in std_logic;
-        tx_byte_i       : in std_logic_vector (7 downto 0);
-        tx_serial_o     : out std_logic;
-        tx_done_o       : out std_logic
-    );
+        generic(
+            baud_rate_g  : integer := 104 -- 1MHz / 9600 = 104,16 ~ 104.
+        );
+        port (
+            cp_i            : in std_logic;
+            rb_i            : in std_logic;
+            tx_dv_i         : in std_logic;
+            tx_byte_i       : in std_logic_vector (7 downto 0);
+            tx_serial_o     : out std_logic;
+            tx_done_o       : out std_logic
+        );
     end component;
 
     constant clk_freq_c : integer := 1_000_000; -- slower clock for faster simulation.
