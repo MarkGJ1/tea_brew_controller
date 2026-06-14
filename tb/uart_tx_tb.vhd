@@ -2,8 +2,8 @@
 -- Description: UART TX Testbench
 -- Author: Marko Gjorgjievski
 -- Date created: 22.10.2025
--- Date modified: 07.06.2026
--- Recent changes: Better assertion test process.
+-- Date modified: 14.06.2026
+-- Recent changes: Added the UART-TX assessmenent procedural block. New comments.
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -40,6 +40,27 @@ architecture uart_tx_tb_a of uart_tx_tb is
     signal tx_serial_s : std_logic;
     signal tx_done_s   : std_logic;
 
+    procedure UART_READ_BYTE(
+        signal   tx_serial    : std_logic;
+        constant tx_byte      : std_logic_vector(7 downto 0)
+    ) is
+    begin
+        wait for 52 us; -- baud_rate / 2 to assert at middle of bit.
+        assert tx_serial = '0' report "Start bit missing." severity error;
+        wait for 104 us;
+
+        for ii in 0 to 7 loop -- Assert loop for every bit transmitted.
+            report "Current bit is " & std_logic'image(tx_serial) & " ." severity note;
+            assert tx_serial = tx_byte(ii) report "Incorrect bit. Bit = " & std_logic'image(tx_serial) severity error;
+            wait for 104 us;
+        end loop;
+
+        for ii in 0 to 1 loop -- Stop bit check loop.
+            assert tx_serial = '1' report "Stop bit missing." severity error;
+            wait for 104 us;
+        end loop;
+    end procedure;
+
 begin
 
     dut : uart_tx_e
@@ -56,9 +77,16 @@ begin
 
     process is
     begin
-
+        -- Should probably implement a initial condition test
+        -- alongside filled initial statements instead of tying
+        -- everything to a reset signal because of the huge fanout.
+        -- This will probably be done in future designs.
         wait for 100 us;
         rb_s <= '1';
+        -- Reset condition check --
+        assert tx_serial_s = '1' report "Serial output not reset!" severity failure;
+        assert tx_serial_s = '0' report "Data valid not reset!" severity failure;
+        -- Reset condition check --
 
         wait until rising_edge(cp_s);
         tx_byte_s <= X"AA"; -- Byte to be transmitted.
@@ -66,36 +94,19 @@ begin
         tx_dv_s   <= '1'; -- Byte valid, start transmit.
         wait until rising_edge(cp_s);
         tx_dv_s   <= '0';
+        UART_READ_BYTE(tx_serial_s, tx_byte_s);
+        wait until tx_done_s = '1';
 
-        wait for 52 us; -- baud_rate / 2 to assert at middle of bit.
-
-        assert tx_serial_s = '0' report "Start bit missing." severity error;
-
-        wait for 104 us;
-
-        for ii in 0 to 7 loop -- Assert loop for every bit transmitted.
-            report "Current bit is " & std_logic'image(tx_serial_s) & " ." severity note;
-            assert tx_serial_s = tx_byte_s(ii) report "Incorrect bit. Bit = " & std_logic'image(tx_serial_s) severity error;
-            wait for 104 us;
-        end loop;
-
-        for ii in 0 to 1 loop -- Stop bit check loop.
-            assert tx_serial_s = '1' report "Stop bit missing." severity error;
-            wait for 104 us;
-        end loop;
-
-        -- Second test transmission to check if UART blocks.
-        ---------------------------------------------------------------
-        wait for 200 us;
+        -- Repeatability test --
+        wait for 10 us;
         tx_byte_s <= X"55";
         wait until rising_edge(cp_s);
         tx_dv_s   <= '1';
         wait until rising_edge(cp_s);
         tx_dv_s   <= '0';
+        UART_READ_BYTE(tx_serial_s, tx_byte_s);
         wait until tx_done_s = '1';
-        
-        wait for 50 us;
-        ---------------------------------------------------------------
+        -- Repeatability test --
 
         -- Test end.
         -- Make sure to enable simulation break on severity failure in ModelSIM to stop simulation.
