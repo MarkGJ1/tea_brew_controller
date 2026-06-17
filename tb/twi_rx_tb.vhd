@@ -2,6 +2,7 @@
 -- Description : Three Wire Interface receiver testbench.
 -- Author : Marko Gjorgjievski
 -- Date created : 15.06.2026
+-- TODO: Fix naming of some internal wiring.
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -68,7 +69,7 @@ begin
         stx_o => stx_s,
         sdv_o => sdv_s,
         sdo_o => sdo_s,
-        dv_o => tx_dv_s
+        dv_o => tx_dv_s -- normally open, the DV comes from TWI receiver.
     );
 
     dut2 : twi_rx_e
