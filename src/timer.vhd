@@ -1,81 +1,139 @@
+-- File name: time_check.vhd
+-- Description: Control signals to indicate brew start/finish.
+-- Author: Marko Gjorgjievski
+-- Date created: 15.03.2025
+-- Date modified: /
+
 library IEEE;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-entity timerV2_e is
+entity timer_e is
 
-  generic(second_g : integer := 12000000);
-  port(
-    cp_i : in  std_logic;
-    rb_i : in  std_logic;
-    st_i : in  std_logic;
-    t0_i : in  std_logic;
-    t1_i : in  std_logic;
-    en_o : out std_logic;
-    sum_o: out integer);
-    
-end timerV2_e;
+    port (
+        cp_i            : in std_logic;
+        rb_i            : in std_logic;
+        t0_i            : in std_logic;
+        t1_i            : in std_logic;
+        rtc_i           : in unsigned(16 downto 0);
+        brew_ena_i      : in std_logic;
+        min_pass_o      : out std_logic;
+        guess_o         : out std_logic;
+        done_o          : out std_logic
+    );
 
-architecture timerV2_a of timerV2_e is
+end entity;
 
-  constant min2_c : integer := 120;
-  constant min3_c : integer := 180;
-  constant min4_c : integer := 240;
-  constant min5_c : integer := 300;
+architecture timer_a of timer_e is
 
-  signal second_s   : integer range 0 to second_g-1;  
-  signal min_s      : integer range 0 to min5_c-1;
-  signal modmin_s   : integer;
-  signal mode2_s, mode3_s : std_logic;
-  signal mode4_s, mode5_s : std_logic;
-  signal en_s : std_logic;
+    -- Minute constants
+    -- constant one_min_c  : unsigned(5 downto 0) := 60;
+    constant two_min_c  : unsigned(8 downto 0) := to_unsigned(120, 9);
+    constant thr_min_c  : unsigned(8 downto 0) := to_unsigned(180, 9);
+    constant fou_min_c  : unsigned(8 downto 0) := to_unsigned(240, 9);
+    constant fiv_min_c  : unsigned(8 downto 0) := to_unsigned(300, 9);
+    constant guess_c    : unsigned(8 downto 0) := to_unsigned(10,  9);
+
+    -- Input registers
+    signal rtc_r        : unsigned(16 downto 0);
+    signal rtc_old_r    : unsigned(16 downto 0);
+    signal brew_ena_r   : std_logic;
+    signal brew_act_r   : std_logic;
+
+    -- Output registers
+    signal min_pass_r   : std_logic;
+    signal guess_r      : std_logic;
+    signal done_r       : std_logic;
+
+    -- Brew time select wires
+    signal brew_sel_w   : std_logic_vector(1 downto 0);
+    signal brew_time_w  : unsigned(8 downto 0);
+    signal brew_time_r  : unsigned(8 downto 0);
+
+    -- Internal counting logic
+    signal min_cnt_r    : integer range 0 to 59;
+    signal total_cnt_r  : integer range 0 to 299;
 
 begin
 
-  mode2_s <= not t0_i and not t1_i;
-  mode3_s <=     t0_i and not t1_i;
-  mode4_s <= not t0_i and     t1_i;
-  mode5_s <=     t0_i and     t1_i;
+    brew_sel_w <= t0_i & t1_i;
 
-  tv2_takt_p: process(rb_i, cp_i)
-  begin
-    if rb_i = '0' then
-      en_s     <= '0';
-    elsif rising_edge(cp_i) then
-      
-      if mode2_s = '1' then
-        modmin_s <= min2_c;
-      elsif mode3_s = '1' then
-        modmin_s <= min3_c;
-      elsif mode4_s = '1' then
-        modmin_s <= min4_c;
-      elsif mode5_s = '1' then
-        modmin_s <= min5_c;
-      end if;
-      
-      if st_i = '1' then
-        if second_s < second_g-1 then
-          second_s <= second_s + 1;
-        else
-          second_s <= 0;
-        
-          if min_s < modmin_s-1 then
-            min_s <= min_s + 1;
-          else
-            min_s <= 0;
-            en_s <= '1';
-          end if;
-          
+    with brew_sel_w select
+    brew_time_w <= two_min_c when "00",
+                   thr_min_c when "01",
+                   fou_min_c when "10",
+                   fiv_min_c when "11",
+                   two_min_c when others;
+
+    p_compare: process(rb_i, cp_i)
+        variable rtc_changed_v  : boolean;
+    begin
+        if rb_i = '0' then
+            rtc_r        <= (others => '0');
+            brew_time_r  <= (others => '0');
+            min_cnt_r    <= 0;
+            total_cnt_r  <= 0;
+            brew_ena_r   <= '0';
+            brew_act_r   <= '0';
+            min_pass_r   <= '0';
+            guess_r      <= '0';  
+            done_r       <= '0';  
+        elsif rising_edge(cp_i) then
+            brew_ena_r   <= brew_ena_i;
+            rtc_r        <= rtc_i;
+            rtc_old_r    <= rtc_r;
+
+            if brew_ena_r = '1' then
+                brew_act_r  <= '1';
+                brew_time_r <= brew_time_w;
+                total_cnt_r <= 0;
+                min_cnt_r   <= 0;
+                done_r      <= '0';
+            end if;            
+
+            rtc_changed_v := not std_match(rtc_r, rtc_old_r);
+
+            if brew_act_r = '1' then
+                if rtc_changed_v then
+                    if min_cnt_r < 59 then
+                        min_cnt_r <= min_cnt_r + 1;
+                    else
+                        min_cnt_r   <= 0;
+                    end if;
+
+                    if total_cnt_r < brew_time_r-1 then
+                        total_cnt_r <= total_cnt_r + 1;
+                        done_r      <= '0';
+                    else
+                        total_cnt_r <= 0;
+                        done_r      <= '1';
+                        brew_act_r  <= '0';
+                    end if;
+                end if;
+            else
+                min_cnt_r   <= 0;
+                total_cnt_r <= 0;
+                min_pass_r  <= '0';
+                done_r      <= '0';
+                guess_r     <= '0';
+            end if;
+
+            if min_cnt_r >= 59 and rtc_changed_v then
+                min_pass_r <= '1';
+            else
+                min_pass_r <= '0';
+            end if;
+
+            if total_cnt_r = (brew_time_r-1-guess_c) and rtc_changed_v then
+                guess_r <= '1';
+            else
+                guess_r <= '0';
+            end if;
         end if;
-      else
-        en_s      <= '0';
-        second_s  <= 0;
-        min_s     <= 0;
-      end if;
-    end if;
-  end process;
-  
-  en_o  <= en_s;
-  sum_o <= modmin_s;
-  
-end timerV2_a;
+    end process;
+
+    min_pass_o  <= min_pass_r;
+    guess_o     <= guess_r;
+    done_o      <= done_r;
+
+end architecture;
