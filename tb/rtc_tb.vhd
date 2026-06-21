@@ -64,16 +64,18 @@ begin
         wait until rising_edge(cp_s);
         upd_s      <= '0';
         wait until rising_edge(cp_s);
-        assert RTC_s = to_unsigned(48_600, 17) report "Incorrect time 1." severity failure;
+        wait until rising_edge(cp_s); -- falling edge of upd_r is where it updates.
+        assert RTC_s = upd_time_s report "Incorrect time 1." severity failure;
         
         wait for 2001 ms;
-        assert RTC_s = to_unsigned(48_602, 17) report "Incorrect time 1." severity failure;
+        assert RTC_s = (upd_time_s + 2) report "Incorrect time 1.5." severity failure;
 
         wait until rising_edge(cp_s);
         upd_time_s <= to_unsigned(86_398, 17);
         upd_s      <= '1';
         wait until rising_edge(cp_s);
         upd_s      <= '0';
+        wait until rising_edge(cp_s);
         wait until rising_edge(cp_s);
         assert RTC_s = to_unsigned(86_398, 17) report "Incorrect time 2." severity failure;
 

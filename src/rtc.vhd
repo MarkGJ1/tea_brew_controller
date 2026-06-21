@@ -27,7 +27,11 @@ architecture rtc_a of rtc_e is
 
     constant hr_wrap_c : unsigned(16 downto 0) := to_unsigned(86399, 17);
 
+    -- Input registers
+    signal upd_r         : std_logic;
     signal RTC_r         : unsigned(16 downto 0);
+
+    -- Internal counting logic
     signal PPS_r         : unsigned(24 downto 0);
 
 begin
@@ -35,9 +39,11 @@ begin
     p_rtc: process(rb_i, cp_i)
     begin
         if rb_i = '0' then
+            upd_r <= '0';
             RTC_r <= (others => '0');
             PPS_r <= (others => '0');
         elsif rising_edge(cp_i) then
+            upd_r <= upd_i;
             if PPS_r < clk_freq_c then
                 PPS_r <= PPS_r + 1;
             else
@@ -49,7 +55,7 @@ begin
                 RTC_r <= (others => '0'); -- Need to wrap around 24H.
             end if;
 
-            if upd_i = '1' then -- Must be a single strobe.
+            if upd_r = '1' then -- Must be a single strobe.
                 RTC_r <= upd_time_i; -- Last signal assignment of RTC wins. Update takes priority.
             end if;
         end if;

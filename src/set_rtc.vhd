@@ -25,6 +25,7 @@ architecture set_rtc_a of set_rtc_e is
 
     -- Input capturing registers
     signal dv_r       : std_logic;
+    signal twi_byte_r : std_logic_vector(7 downto 0);
     signal sec_r      : unsigned(6 downto 0);  -- 0-59
     signal min_r      : unsigned(6 downto 0);  -- 0-59
     signal hour_r     : unsigned(4 downto 0);  -- 0-23
@@ -45,12 +46,14 @@ begin
             dv_r       <= '0';
             rtc_dv_r   <= '0';
             tim_dv_r   <= '0';
+            twi_byte_r <= (others => '0');
             rtc_r      <= (others => '0');
             sec_r      <= (others => '0');
             min_r      <= (others => '0');
             hour_r     <= (others => '0');
         elsif rising_edge(cp_i) then
             dv_r    <= dv_i;
+            twi_byte_r <= twi_byte_i;
             if dv_r = '1' then
                 if byte_idx_r < 3 then
                     byte_idx_r <= byte_idx_r + 1;
@@ -84,13 +87,13 @@ begin
                         rtc_dv_r <= '1';
                     when others => null;
                 end case;
-
-                if twi_byte_i = x"45" then
-                    tim_dv_r <= '1';
-                end if;
             else
                 rtc_dv_r   <= '0';
                 tim_dv_r   <= '0';
+            end if;
+
+            if twi_byte_r = x"45" and rtc_dv_r = '1' then
+                tim_dv_r <= '1';
             end if;
         end if;
     end process;
