@@ -70,6 +70,7 @@ begin
     begin
         if rb_i = '0' then
             rtc_r        <= (others => '0');
+            rtc_old_r    <= (others => '0');
             brew_time_r  <= (others => '0');
             min_cnt_r    <= 0;
             total_cnt_r  <= 0;
@@ -93,6 +94,12 @@ begin
 
             rtc_changed_v := not std_match(rtc_r, rtc_old_r);
 
+            if min_cnt_r >= 59 and rtc_changed_v then
+                min_pass_r <= '1';
+            else
+                min_pass_r <= '0';
+            end if;
+
             if brew_act_r = '1' then
                 if rtc_changed_v then
                     if min_cnt_r < 59 then
@@ -105,6 +112,7 @@ begin
                         total_cnt_r <= total_cnt_r + 1;
                         done_r      <= '0';
                     else
+                        min_pass_r  <= '0';
                         total_cnt_r <= 0;
                         done_r      <= '1';
                         brew_act_r  <= '0';
@@ -116,12 +124,6 @@ begin
                 min_pass_r  <= '0';
                 done_r      <= '0';
                 guess_r     <= '0';
-            end if;
-
-            if min_cnt_r >= 59 and rtc_changed_v then
-                min_pass_r <= '1';
-            else
-                min_pass_r <= '0';
             end if;
 
             if total_cnt_r = (brew_time_r-1-guess_c) and rtc_changed_v then
