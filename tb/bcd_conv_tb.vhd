@@ -16,13 +16,13 @@ architecture bcd_conv_tb_a of bcd_conv_tb is
 
 	component bcd_conv_e is
 		port(
-            cp_i    : in std_logic;
-            rb_i    : in std_logic;
-            dv_i    : in std_logic;                     -- take reg88 for conversion.
-            tw_dv_i : in std_logic;                     -- byte valid from TWI, go for next byte.
-            reg88_i : in std_logic_vector(87 downto 0); -- xx:xx:xxE<CR><LF>, treating CR and LF as dummy data to have dv_o high.
-            byte_o  : out std_logic_vector(7 downto 0);
-            dv_o    : out std_logic                     -- ASCII converted, tell TWI to start transmission.
+            cp_i     : in std_logic;
+            rb_i     : in std_logic;
+            dv_i     : in std_logic;                     -- take reg88 for conversion.
+            twi_dv_i : in std_logic;                     -- byte valid from TWI, go for next byte.
+            reg88_i  : in std_logic_vector(87 downto 0); -- xx:xx:xxE<CR><LF>, treating CR and LF as dummy data to have dv_o high.
+            byte_o   : out std_logic_vector(7 downto 0);
+            dv_o     : out std_logic                     -- ASCII converted, tell TWI to start transmission.
         );
 	end component;
 
@@ -76,18 +76,18 @@ architecture bcd_conv_tb_a of bcd_conv_tb is
 
 begin
 
-	dut1 : bcd_conv_e
+	dut1: bcd_conv_e
 	port map(
-		cp_i => cp_s,
-		rb_i => rb_s,
-		dv_i => reg88_dv_s,
-        tw_dv_i => tx_done_s,
-        reg88_i => reg88_s,
-        byte_o => tx_byte_s,
-        dv_o => tx_dv_s
+		cp_i     => cp_s,
+		rb_i     => rb_s,
+		dv_i     => reg88_dv_s,
+        twi_dv_i => tx_done_s,
+        reg88_i  => reg88_s,
+        byte_o   => tx_byte_s,
+        dv_o     => tx_dv_s
 	);
 
-    dut2 : uart_tx_e
+    dut2: uart_tx_e
     port map(
         cp_i => cp_s,
         rb_i => rb_s,

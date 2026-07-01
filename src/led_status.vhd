@@ -61,7 +61,7 @@ architecture led_status_a of led_status_e is
 
 begin
 
-    ld1_o <= rb_i;
+    ld1_o <= not rb_i;
 
     heartbeat: hb_led_e
     port map(
@@ -102,7 +102,7 @@ begin
         btn_o => ld6_o
     );
 
-    ld7_o <= txd_i;
+    ld7_o <= not txd_i;
     ld8_o <= snd_i;
 
 end architecture;
