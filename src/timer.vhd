@@ -56,7 +56,7 @@ architecture timer_a of timer_e is
 
 begin
 
-    brew_sel_w <= t0_i & t1_i;
+    brew_sel_w <= t1_i & t0_i;
 
     with brew_sel_w select
     brew_time_w <= two_min_c when "00",

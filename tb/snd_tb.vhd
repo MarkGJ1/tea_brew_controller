@@ -50,13 +50,11 @@ begin
     process is
     begin
 
-        wait until rising_edge(cp_s);
-        wait until rising_edge(cp_s);
+        wait for 10 ms;
         rb_s <= '1';
         wait until rising_edge(cp_s);
-        wait for 50 ms;
         snd_ena_s <= '1';
-        wait for 10 us;
+        wait until rising_edge(cp_s);
         snd_ena_s <= '0';
         wait for 1050 ms; -- Make sure time res is 100ns.
         -- Test end.

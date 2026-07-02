@@ -35,7 +35,7 @@ architecture top_level_a of top_level_tb is
         );
     end component;
 
-    constant clk_freq_c : integer := 1_000_000; -- slower clock for faster simulation.
+    constant clk_freq_c : integer := 27_000_000; -- slower clock for faster simulation.
     constant clk_period_c : time := 1000 ms/clk_freq_c;
 
     signal cp_s : std_logic := '0';
@@ -141,14 +141,14 @@ begin
         wait until rising_edge(cp_s);
 
         -- Reset condition check --
-        assert ld1_s = '0' report "Incorrect LED value: " & std_logic'image(ld1_s) severity error;
-        assert ld2_s = '0' report "Incorrect LED value: " & std_logic'image(ld2_s) severity error;
-        assert ld3_s = '0' report "Incorrect LED value: " & std_logic'image(ld3_s) severity error;
-        assert ld4_s = '0' report "Incorrect LED value: " & std_logic'image(ld4_s) severity error;
-        assert ld5_s = '0' report "Incorrect LED value: " & std_logic'image(ld5_s) severity error;
-        assert ld6_s = '0' report "Incorrect LED value: " & std_logic'image(ld6_s) severity error;
-        assert ld7_s = '0' report "Incorrect LED value: " & std_logic'image(ld7_s) severity error;
-        assert ld8_s = '0' report "Incorrect LED value: " & std_logic'image(ld8_s) severity error;
+        assert ld1_s = '1' report "Incorrect LED1 value: " & std_logic'image(ld1_s) severity error;
+        assert ld2_s = '0' report "Incorrect LED2 value: " & std_logic'image(ld2_s) severity error;
+        assert ld3_s = '1' report "Incorrect LED3 value: " & std_logic'image(ld3_s) severity error;
+        assert ld4_s = '1' report "Incorrect LED4 value: " & std_logic'image(ld4_s) severity error;
+        assert ld5_s = '1' report "Incorrect LED5 value: " & std_logic'image(ld5_s) severity error;
+        assert ld6_s = '1' report "Incorrect LED6 value: " & std_logic'image(ld6_s) severity error;
+        assert ld7_s = '1' report "Incorrect LED7 value: " & std_logic'image(ld7_s) severity error;
+        assert ld8_s = '1' report "Incorrect LED8 value: " & std_logic'image(ld8_s) severity error;
         assert txd_s = '1' report "Incorrect UART-TX output!" severity error;
         assert snd_s = '0' report "Incorrect Sound value!" severity error;
         report "Reset condition test passed!";

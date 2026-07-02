@@ -12,7 +12,7 @@ entity snd_e is
 
     generic(clk_freq_g : integer := 27_000_000;
             snd_freq_g : integer := 27_000; -- 1KHz Sound wave = clk_freq_g / snd_freq_g
-            ring_dur_g : integer := 3 
+            ring_dur_g : integer := 5 
     );
     port(cp_i       : in std_logic;
         rb_i        : in std_logic;
@@ -26,11 +26,11 @@ architecture snd_a of snd_e is
 
     constant ring_dur_c       : integer := clk_freq_g * ring_dur_g;
     constant snd_freq_c       : integer := clk_freq_g / (snd_freq_g * 2); -- multiply by a factor of 2 to get the half period where the signal changes.
-    constant ring_dur_width_c : integer := 27; -- ceil(log2(27e6*3))
+    constant ring_dur_width_c : integer := 28;
     constant snd_freq_width_c : integer := 15; 
 
-    signal ring_counter_r   : unsigned(ring_dur_width_c-1 downto 0);
-    signal snd_counter_r    : unsigned(snd_freq_width_c-1 downto 0);
+    signal ring_counter_r   : unsigned(ring_dur_width_c downto 0);
+    signal snd_counter_r    : unsigned(snd_freq_width_c downto 0);
     signal ena_ff, ena_ff2  : std_logic; -- 2FF Synchronizer
     signal snd_r            : std_logic;
 
@@ -70,7 +70,7 @@ begin
                     snd_counter_r  <= (others => '0');
                 end if;
             else
-                done_r         <= '0';
+                snd_r          <= '0';
                 ring_counter_r <= (others => '0');
                 snd_counter_r  <= (others => '0');
             end if;
@@ -109,7 +109,7 @@ begin
         case fsm_r is
             when IDLE    => null;
             when RINGING => ring_ena_w <= '1';
-            when DONE    => null;
+            when DONE    => ring_ena_w <= '0';
             when others  => ring_ena_w <= '0';
         end case;
     end process;

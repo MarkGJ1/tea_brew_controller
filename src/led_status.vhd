@@ -36,8 +36,8 @@ architecture led_status_a of led_status_e is
 
     component hb_led_e is
         generic(
-            hb_halfperiod_g : natural := 500_000;
-            counter_width_g : natural := 19
+            hb_halfperiod_g : natural := 13_500_000;
+            counter_width_g : natural := 24
         );
         port(
             cp_i : in std_logic;
@@ -48,8 +48,8 @@ architecture led_status_a of led_status_e is
 
     component debounce_e is
         generic(
-            clk_freq_g : integer := 1_000_000;
-            db_freq_g  : integer := 1000 -- finds closest power of 2 to divide clock for closest 100Hz simulation.
+            clk_freq_g : integer := 27_000_000;
+            db_freq_g  : integer := 27_000 -- finds closest power of 2 to divide clock for closest 100Hz simulation.
         );
         port (
             cp_i        : in std_logic;
@@ -59,9 +59,11 @@ architecture led_status_a of led_status_e is
         );
     end component;
 
+    signal ld3_s, ld4_s, ld5_s, ld6_s : std_logic;
+
 begin
 
-    ld1_o <= not rb_i;
+    ld1_o <= rb_i;
 
     heartbeat: hb_led_e
     port map(
@@ -75,7 +77,7 @@ begin
         cp_i => cp_i,
         rb_i => rb_i,
         btn_i => m0_i,
-        btn_o => ld3_o
+        btn_o => ld3_s
     );
 
     debounce2: debounce_e
@@ -83,7 +85,7 @@ begin
         cp_i => cp_i,
         rb_i => rb_i,
         btn_i => m1_i,
-        btn_o => ld4_o
+        btn_o => ld4_s
     );
 
     debounce3: debounce_e
@@ -91,7 +93,7 @@ begin
         cp_i => cp_i,
         rb_i => rb_i,
         btn_i => t0_i,
-        btn_o => ld5_o
+        btn_o => ld5_s
     );
     
     debounce4: debounce_e
@@ -99,10 +101,14 @@ begin
         cp_i => cp_i,
         rb_i => rb_i,
         btn_i => t1_i,
-        btn_o => ld6_o
+        btn_o => ld6_s
     );
 
-    ld7_o <= not txd_i;
-    ld8_o <= snd_i;
+    ld3_o <= not ld3_s;
+    ld4_o <= not ld4_s;
+    ld5_o <= not ld5_s;
+    ld6_o <= not ld6_s;
+    ld7_o <= txd_i;
+    ld8_o <= not snd_i;
 
 end architecture;

@@ -29,7 +29,7 @@ package top_package is
 
     component twi_tx_e is
         generic(
-            data_rate_g  : integer := 1_000 -- 1MHz / 1000 = 1000
+            data_rate_g  : integer := 27_000 -- 27_000_000 / 27_000 = 1kHz
         );
         port (
             cp_i        : in std_logic;
@@ -57,7 +57,7 @@ package top_package is
 
     component uart_rx_e is
 		generic (
-			baud_rate_g : integer := 104 -- 1MHz / 9600 = 104.16 ~ 104 us.
+			baud_rate_g : integer := 2812 -- 27MHz / 9600 = 2812
 		);
 		port (
 			cp_i        : in std_logic;
@@ -70,7 +70,7 @@ package top_package is
 
     component uart_tx_e is
         generic(
-            baud_rate_g  : integer := 104 -- 1MHz / 9600 = 104,16 ~ 104.
+            baud_rate_g  : integer := 2812 -- 27MHz / 9600 = 2812
         );
         port (
             cp_i            : in std_logic;
@@ -84,7 +84,7 @@ package top_package is
 
     component rtc_e is
 		generic(
-            clk_freq_c : integer := 1_000_000
+            clk_freq_c : integer := 27_000_000
         );
         port (
             cp_i            : in std_logic;
@@ -122,9 +122,9 @@ package top_package is
     end component;
 
     component snd_e is
-        generic(clk_freq_g : integer := 1_000_000;
-                snd_freq_g : integer := 1_000; -- 1KHz Sound wave = clk_freq_g / snd_freq_g
-                ring_dur_g : integer := 3 
+        generic(clk_freq_g : integer := 27_000_000;
+                snd_freq_g : integer := 27_000; -- 10KHz Sound wave = clk_freq_g / snd_freq_g
+                ring_dur_g : integer := 5 
         );
         port(cp_i       : in std_logic;
             rb_i        : in std_logic;
