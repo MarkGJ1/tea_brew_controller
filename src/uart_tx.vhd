@@ -1,193 +1,172 @@
+-- File name: uart_tx.vhd
+-- Description: UART TX Module for sending data to UART Receiver. Fixed 9600 Baud on 27MHz. 8N2 UART.
+-- Author: Marko Gjorgjievski
+-- Date created: 15.03.2025
+-- Date modified: 07.06.2026
+-- Recent changes: Greatly simplified and hard-coded uart rate (9600) for tang base clock.
+
 library IEEE;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-entity uartV2_tx_e is
+entity uart_tx_e is
 
-  generic(baud_g  : integer := 1250);
-  port(
-    cp_i        : in  std_logic;
-    rb_i        : in  std_logic;
-    tx_dv_i     : in  std_logic;
-    tx_byte_i   : in  std_logic_vector(7 downto 0);
-    tx_active_o : out std_logic;
-    tx_serial_o : out std_logic;
-    tx_done_o   : out std_logic);
+    generic(
+        baud_rate_g : integer := 2813 -- 27MHz / 9600 = 2812,5 ~ 2813.
+    );
+    port (
+        cp_i        : in  std_logic;
+        rb_i        : in  std_logic;
+        tx_dv_i     : in  std_logic;
+        tx_byte_i   : in  std_logic_vector(7 downto 0);
+        tx_active_o : out std_logic;
+        tx_serial_o : out std_logic;
+        tx_done_o   : out std_logic
+    );
+
 end entity;
 
-architecture uartV2_tx_a of uartV2_tx_e is
+architecture uart_tx_a of uart_tx_e is
 
-  type tx_fsm_t is (idle_st, bitST_st, bit1_st, bit2_st, bit3_st, bit4_st,
-  bit5_st, bit6_st, bit7_st, bit8_st, bitD_st, bitD2_st, clean_st);
-  
-  signal tx_fsm_s, tx_fsmnx_s : tx_fsm_t;
-  signal baud_s     : integer range 0 to baud_g-1;
-  signal tx_data_s  : std_logic_vector(7 downto 0);
-  signal nx_s       : std_logic;
-  signal activ_s    : std_logic;
-  signal tx_done_s  : std_logic;
-  
+    constant baud_width_c : integer := 12; -- ceil(log2(2813))
+
+    type uart_fsm_t is (IDLE, START, DATA, STOP_B, DONE);
+    signal fsm_r, fsm_next_w : uart_fsm_t;
+
+    signal baud_sample_r  : unsigned(baud_width_c-1 downto 0);
+    signal baud_ena_w     : std_logic;
+    signal baud_tick_r    : std_logic;
+
+    signal tx_dv_r        : std_logic;
+    signal tx_done_r      : std_logic;
+    signal tx_serial_r    : std_logic;
+    signal tx_byte_r      : std_logic_vector(7 downto 0);
+
+    signal tx_bit_idx_r   : integer range 0 to 7;
+    signal tx_stop_idx_r  : integer range 0 to 1;
 
 begin
 
-  tx_active_o <= activ_s;
-  tx_done_o   <= tx_done_s;
+    p_baud_gen : process(rb_i, cp_i)
+    begin
+        if rb_i = '0' then
+            baud_sample_r <= (others => '0');
+            baud_tick_r   <= '0';
+        elsif rising_edge(cp_i) then
+            if baud_ena_w = '1' then
+                if baud_sample_r = baud_rate_g then
+                    baud_sample_r <= (others => '0');
+                    baud_tick_r   <= '1';
+                else
+                    baud_sample_r <= baud_sample_r + 1;
+                    baud_tick_r   <= '0';
+                end if;
+            else
+                baud_tick_r   <= '0';
+                baud_sample_r <= (others => '0');
+            end if;
+        end if;
+    end process;
 
-  tx_takt_p: process(cp_i, rb_i, activ_s)
-  begin
-    if rb_i = '0' then
-      tx_fsm_s <= idle_st;
-    elsif rising_edge(cp_i) then
-      tx_fsm_s <= tx_fsmnx_s;
-      
-      if activ_s = '1' then
-        if baud_s < baud_g-1 then
-          baud_s <= baud_s + 1;
-          nx_s   <= '0';
-        else
-          baud_s <= 0;
-          nx_s   <= '1';
+    p_counter_logic : process(cp_i, rb_i)
+    begin
+        if rb_i = '0' then
+            tx_bit_idx_r  <= 0;
+            tx_stop_idx_r <= 0;
+        elsif rising_edge(cp_i) then
+            if baud_tick_r = '1' then
+                case fsm_r is
+                    when DATA =>
+                        if tx_bit_idx_r < 7 then
+                            tx_bit_idx_r <= tx_bit_idx_r + 1;
+                        else
+                            tx_bit_idx_r <= 0;
+                        end if;
+                    when STOP_B =>
+                        if tx_stop_idx_r < 1 then
+                            tx_stop_idx_r <= tx_stop_idx_r + 1;
+                        else
+                            tx_stop_idx_r <= 0;
+                        end if;
+                    when others => null;
+                end case;
+            end if;
         end if;
-      else
-        baud_s <= 0;
-        nx_s   <= '0';
-      end if;
-    end if;  
-  end process;
-  
+    end process;
 
-  tx_fsmf_p: process(tx_fsm_s, tx_dv_i, nx_s)
-  begin
-    tx_fsmnx_s <= tx_fsm_s;
-    
-    case tx_fsm_s is
-      when idle_st =>
-        if tx_dv_i = '1' then
-          tx_fsmnx_s <= bitST_st;
-        else
-          tx_fsmnx_s <= idle_st;
+    p_bit_transmit : process(rb_i, cp_i)
+    begin
+        if rb_i = '0' then
+            tx_serial_r <= '1';
+            tx_dv_r     <= '0';
+            tx_byte_r   <= (others => '0');
+        elsif rising_edge(cp_i) then
+            tx_dv_r <= tx_dv_i;
+
+            if tx_dv_r = '1' then
+                tx_byte_r <= tx_byte_i;
+            end if;
+
+            case fsm_r is
+                when IDLE | DONE => tx_serial_r <= '1';
+                when START       => tx_serial_r <= '0';
+                when DATA        => tx_serial_r <= tx_byte_r(tx_bit_idx_r);
+                when STOP_B      => tx_serial_r <= '1';
+                when others      => tx_serial_r <= '1';
+            end case;
         end if;
-      when bitST_st =>
-        if nx_s = '1' then
-          tx_fsmnx_s <= bit1_st;
-        else
-          tx_fsmnx_s <= bitST_st;
+    end process;
+
+    p_fsm_clocked : process(rb_i, cp_i)
+    begin
+        if rb_i = '0' then
+            fsm_r <= IDLE;
+        elsif rising_edge(cp_i) then
+            fsm_r <= fsm_next_w;
         end if;
-      when bit1_st =>
-        if nx_s = '1' then
-          tx_fsmnx_s <= bit2_st;
-        else
-          tx_fsmnx_s <= bit1_st;
-        end if;
-      when bit2_st =>
-        if nx_s = '1' then
-          tx_fsmnx_s <= bit3_st;
-        else
-          tx_fsmnx_s <= bit2_st;
-        end if;
-      when bit3_st =>
-        if nx_s = '1' then
-          tx_fsmnx_s <= bit4_st;
-        else
-          tx_fsmnx_s <= bit3_st;
-        end if;
-      when bit4_st =>
-        if nx_s = '1' then
-          tx_fsmnx_s <= bit5_st;
-        else
-          tx_fsmnx_s <= bit4_st;
-        end if;
-      when bit5_st =>
-        if nx_s = '1' then
-          tx_fsmnx_s <= bit6_st;
-        else
-          tx_fsmnx_s <= bit5_st;
-        end if;
-      when bit6_st =>
-        if nx_s = '1' then
-          tx_fsmnx_s <= bit7_st;
-        else
-          tx_fsmnx_s <= bit6_st;
-        end if;
-      when bit7_st =>
-        if nx_s = '1' then
-          tx_fsmnx_s <= bit8_st;
-        else
-          tx_fsmnx_s <= bit7_st;
-        end if;
-      when bit8_st =>
-        if nx_s = '1' then
-          tx_fsmnx_s <= bitD_st;
-        else
-          tx_fsmnx_s <= bit8_st;
-        end if;
-      when bitD_st =>
-        if nx_s = '1' then
-          tx_fsmnx_s <= bitD2_st;
-        else
-          tx_fsmnx_s <= bitD_st;
-        end if;
-      when bitD2_st =>
-        if nx_s = '1' then
-          tx_fsmnx_s <= clean_st;
-        else
-          tx_fsmnx_s <= bitD2_st;
-        end if;
-      when clean_st =>
-        tx_fsmnx_s <= idle_st;
-      when others =>
-        tx_fsmnx_s <= idle_st;
-   
-    end case;
-  end process;
-  
-  tx_out_p: process(tx_fsm_s)
-  begin
-  
-    case tx_fsm_s is
-      when idle_st =>
-        activ_s     <= '0';
-        tx_data_s   <= (others => '0');
-        tx_serial_o <= '1';
-        tx_done_s   <= '0';
-        
-      when bitST_st =>
-        activ_s <= '1';
-        tx_serial_o <= '0';
-        tx_data_s   <= tx_byte_i;
-        
-      when bit1_st =>
-        tx_serial_o <= tx_data_s(0);
-      when bit2_st =>
-        tx_serial_o <= tx_data_s(1);
-      when bit3_st =>
-        tx_serial_o <= tx_data_s(2);
-      when bit4_st =>
-        tx_serial_o <= tx_data_s(3);
-      when bit5_st =>
-        tx_serial_o <= tx_data_s(4);
-      when bit6_st =>
-        tx_serial_o <= tx_data_s(5);
-      when bit7_st =>
-        tx_serial_o <= tx_data_s(6);
-      when bit8_st =>
-        tx_serial_o <= tx_data_s(7);
-      when bitD_st =>
-        tx_serial_o <= '1';
-      when bitD2_st =>
-        tx_serial_o <= '1';
-        
-      when clean_st =>
-        tx_serial_o <= '1';
-        tx_done_s   <= '1';
-        activ_s     <= '0';
-        tx_data_s   <= (others => '0');
-      when others =>
-        activ_s     <= '0';
-        tx_data_s   <= (others => '0');
-        tx_serial_o <= '1';
-        tx_done_s   <= '0';
-    end case;
-  
-  end process;
+    end process;
+
+    p_fsm_transition : process(fsm_r, tx_dv_r, baud_tick_r, tx_bit_idx_r, tx_stop_idx_r)
+    begin
+        fsm_next_w <= fsm_r;
+        case fsm_r is
+            when IDLE =>
+                if tx_dv_r = '1' then
+                    fsm_next_w <= START;
+                end if;
+            when START =>
+                if baud_tick_r = '1' then
+                    fsm_next_w <= DATA;
+                end if;
+            when DATA =>
+                if baud_tick_r = '1' and tx_bit_idx_r = 7 then
+                    fsm_next_w <= STOP_B;
+                end if;
+            when STOP_B =>
+                if baud_tick_r = '1' and tx_stop_idx_r = 1 then
+                    fsm_next_w <= DONE;
+                end if;
+            when DONE =>
+                fsm_next_w <= IDLE;
+            when others =>
+                fsm_next_w <= IDLE;
+        end case;
+    end process;
+
+    p_fsm_output : process(fsm_r)
+    begin
+        baud_ena_w  <= '0';
+        tx_done_r   <= '0';
+        case fsm_r is
+            when IDLE   => null;
+            when START | DATA | STOP_B => baud_ena_w  <= '1';
+            when DONE   => tx_done_r <= '1';
+            when others => null;
+        end case;
+    end process;
+
+    tx_done_o   <= tx_done_r;
+    tx_serial_o <= tx_serial_r;
+    tx_active_o <= baud_ena_w;
+
 end architecture;
