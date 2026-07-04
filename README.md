@@ -19,7 +19,7 @@ Target-board: Tang Nano 9K (GW1NR-LV9QN88PC6/I5)
 - TBA...
 
 ### Previous toolchain (legacy)
-> This section reflects an earlier version of the project. See the [original modules](https://github.com/MarkGJ1/tea_brew_controller/commit/9bd1245fca169cd15b82d5c88ca72abe201ece68) for full context.
+> This section reflects an earlier version of the project. See the [original modules](https://github.com/MarkGJ1/tea_brew_controller/tree/9bd1245) for full context.
 
 All simulations and compilations were performed in ModelSim.<br>
 Synthesis, place-and-route, and programming were done in Intel's Quartus Prime Lite.<br>
