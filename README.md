@@ -1,10 +1,10 @@
 # Tea Brew Controller
 A fully synthesizable digital timer circuit coupled with UART and a custom three-wire communication interface written in VHDL. <br>
-The Tea Brew Controller counts the elapsed time using an internal RTC and, once the tea bag has been submerged for long enough, transmits a 1kHz soundwave, flashes an LED, and sends a message to the PC via UART.<br\><br\>
+The Tea Brew Controller counts the elapsed time using an internal RTC and, once the tea bag has been submerged for long enough, transmits a 1kHz soundwave, flashes an LED, and sends a message to the PC via UART.
 
 All simulations and compilations were performed in ModelSim.<br>
 Synthesis, place-and-route were done in GOWIN FPGA Designer.<br>
-Programming was done using ![openFPGALoader](https://github.com/trabucayre/openFPGALoader).<br>
+Programming was done using [openFPGALoader](https://github.com/trabucayre/openFPGALoader).<br>
 Target-board: Tang Nano 9K (GW1NR-LV9QN88PC6/I5)
 
 ## DEMO
